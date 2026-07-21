@@ -320,6 +320,18 @@
       try { localStorage.setItem('pg_token', token); } catch (e) {}
       say('심었습니다. 잠시 후 정원에 새 폴라로이드가 걸립니다. (반영까지 1–2분)', 'ok');
       $('publish').disabled = true;
+      // 다음 사진을 위해 입력칸 비우기
+      picked = null;
+      $('cap').value = ''; $('text').value = '';
+      $('prevCap').textContent = ' ';
+      const prevImg = $('prevSlot');
+      if (prevImg && prevImg.tagName === 'IMG') {
+        prevImg.outerHTML = '<div class="slot" id="prevSlot"><span>사진이 놓일 자리</span></div>';
+      }
+      currentJson = remote;
+      const nextNo = String(remote.photos.length + 1).padStart(3, '0');
+      $('no').value = nextNo;
+      $('prevNo').textContent = 'No.' + nextNo;
     } catch (err) {
       say('실패: ' + err.message + '\n토큰 권한(Contents: Read and write)과 저장소 이름을 확인해주세요.', 'err');
     }
