@@ -178,6 +178,345 @@
       <div class="row">
         <div>
           <label>저장소 (owner/repo)</label>
+          <input type="text" id="repo" value="oldmarx-web/pretty-garden.co.kr">
+        </div>
+        <div>
+          <label>브랜치</label>
+          <input type="text" id="branch" value="main">
+        </div>
+      </div>
+      <label>Personal Access Token</label>
+      <input type="password" id="token" placeholder="github_pat_...">
+      <button class="btn" id="publish" disabled>정원에 심기 — 깃허브로 발행</button>
+    </details>
+
+    <button class="btn ghost" id="download" disabled>토큰 없이 — 파일로 내려받아 직접 올리기</button>
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- ===== 오른쪽: 미리보기 ===== -->
+  <div class="preview-wrap">
+    <div class="card" style="padding:26px;">
+      <h2>PREVIEW</h2>
+      <figure class="pol" id="prevPol">
+        <div class="slot" id="prevSlot"><span>사진이 놓일 자리</span></div>
+        <figcaption class="cap"><span class="no" id="prevNo">No.001</span><span id="prevCap">&nbsp;</span></figcaption>
+      </figure>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const drop = $('drop'), fileInput = $('file'), log = $('log');
+  let picked = null;        // {file, dataUrl, ext}
+  let currentJson = { photos: [] };
+
+  // ---------- 기존 photos.json 불러와 다음 번호 계산 ----------
+  fetch('photos.json', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : { photos: [] }))
+    .catch(() => ({ photos: [] }))
+    .then((data) => {
+      currentJson = data.photos ? data : { photos: [] };
+      const next = String(currentJson.photos.length + 1).padStart(3, '0');
+      $('no').value = next;
+      $('prevNo').textContent = 'No.' + next;
+    });
+
+  const today = new Date();
+  $('date').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+
+  // ---------- 파일 선택 / 드래그 ----------
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault(); drop.classList.remove('over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  function handleFile(file) {
+    if (!file.type.startsWith('image/')) { say('이미지 파일만 놓을 수 있어요.', 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      picked = { file, dataUrl: reader.result, ext: (file.name.split('.').pop() || 'jpg').toLowerCase() };
+      const slot = $('prevSlot');
+      slot.outerHTML = '<img id="prevSlot" src="' + reader.result + '" alt="preview">';
+      $('publish').disabled = false;
+      $('download').disabled = false;
+      say('사진이 준비되었습니다. 캡션을 쓰고 심어주세요.');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---------- 미리보기 갱신 ----------
+  $('cap').addEventListener('input', () => { $('prevCap').textContent = $('cap').value || ' '; });
+  $('no').addEventListener('input', () => { $('prevNo').textContent = 'No.' + ($('no').value || '···'); });
+
+  function newEntry() {
+    const no = $('no').value.trim() || '001';
+    return {
+      src: 'photos/no' + no + '.' + picked.ext,
+      no,
+      cap: $('cap').value.trim(),
+      text: $('text').value.trim(),
+      date: $('date').value.trim(),
+    };
+  }
+
+  function say(msg, cls) { log.textContent = msg; log.className = 'log ' + (cls || ''); }
+
+  // ---------- 방식 A: 깃허브 API로 바로 발행 ----------
+  $('publish').addEventListener('click', async () => {
+    if (!picked) return;
+    const repo = $('repo').value.trim(), branch = $('branch').value.trim() || 'main', token = $('token').value.trim();
+    if (!repo.includes('/') || !token) { say('저장소(owner/repo)와 토큰을 확인해주세요.', 'err'); return; }
+    const entry = newEntry();
+    const api = 'https://api.github.com/repos/' + repo + '/contents/';
+    const headers = {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    };
+    try {
+      say('심는 중… (1/2 사진 업로드)');
+      // 1) 사진 업로드
+      const b64 = picked.dataUrl.split(',')[1];
+      let res = await fetch(api + entry.src, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ message: '🌱 ' + (entry.cap || entry.src), content: b64, branch }),
+      });
+      if (!res.ok && res.status !== 422) throw new Error('사진 업로드 실패 (' + res.status + ')');
+
+      say('심는 중… (2/2 목록 갱신)');
+      // 2) photos.json 갱신 (원격 최신본 기준)
+      const getRes = await fetch(api + 'photos.json?ref=' + branch, { headers });
+      let sha, remote = { photos: [] };
+      if (getRes.ok) {
+        const j = await getRes.json();
+        sha = j.sha;
+        try { remote = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))))); } catch (e) {}
+      }
+      remote.photos = remote.photos || [];
+      remote.photos.push(entry);
+      const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(remote, null, 2))));
+      res = await fetch(api + 'photos.json', {
+        method: 'PUT', headers,
+        body: JSON.stringify({ message: '🌱 photos.json — No.' + entry.no, content: newContent, sha, branch }),
+      });
+      if (!res.ok) throw new Error('photos.json 갱신 실패 (' + res.status + ')');
+
+      say('심었습니다. 잠시 후 정원에 새 폴라로이드가 걸립니다. (Pages 반영까지 1–2분)', 'ok');
+      $('publish').disabled = true;
+    } catch (err) {
+      say('실패: ' + err.message + '\n토큰 권한(Contents: Read and write)과 저장소 이름을 확인해주세요.', 'err');
+    }
+  });
+
+  // ---------- 방식 B: 파일로 내려받아 직접 커밋 ----------
+  $('download').addEventListener('click', () => {
+    if (!picked) return;
+    const entry = newEntry();
+    // 1) 이름 바꾼 사진 내려받기
+    const a1 = document.createElement('a');
+    a1.href = picked.dataUrl;
+    a1.download = 'no' + entry.no + '.' + picked.ext;
+    a1.click();
+    // 2) 갱신된 photos.json 내려받기
+    const updated = { photos: [...(currentJson.photos || []), entry] };
+    const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
+    const a2 = document.createElement('a');
+    a2.href = URL.createObjectURL(blob);
+    a2.download = 'photos.json';
+    setTimeout(() => a2.click(), 400);
+    say('두 파일을 내려받았습니다.\n① 사진 → 저장소의 photos/ 폴더에 업로드\n② photos.json → 저장소 루트에 덮어쓰기', 'ok');
+  });
+})();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>작은정원 — 가드너의 방 (Admin)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Nanum+Pen+Script&family=Noto+Sans+KR:wght@300;400;500&family=Cormorant+Garamond:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board:#1c1a16;--board-deep:#26241d;--ink:#1c1a16;--ink-soft:#55514a;
+    --ivory:#efeadd;--ivory-soft:rgba(239,234,221,.62);
+    --moss:#5a614a;--moss-lt:#9aa284;--paper:#fdfcf8;
+    --serif:'Gowun Batang',serif;--sans:'Noto Sans KR',sans-serif;--pen:'Nanum Pen Script',cursive;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--board);color:var(--ivory);
+    font-family:var(--serif);line-height:1.8;-webkit-font-smoothing:antialiased;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+  a{color:inherit;}
+  .top{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:22px 40px;border-bottom:1px solid rgba(239,234,221,.14);
+  }
+  .logo{font-size:15px;letter-spacing:.35em;font-weight:700;color:var(--ivory);}
+  .logo span{display:block;font-family:var(--sans);font-weight:300;font-size:8.5px;letter-spacing:.5em;color:var(--ivory-soft);margin-top:2px;}
+  .top a{font-family:var(--sans);font-size:11.5px;letter-spacing:.2em;color:var(--ivory-soft);text-decoration:none;}
+  .top a:hover{color:var(--ivory);}
+
+  .head{text-align:center;padding:54px 20px 10px;}
+  .head h1{font-size:26px;font-weight:400;letter-spacing:.04em;color:var(--ivory);}
+  .head .pen{font-family:var(--pen);font-size:22px;color:var(--moss-lt);margin-top:8px;}
+
+  .grid{
+    max-width:1060px;margin:40px auto 80px;padding:0 24px;
+    display:grid;grid-template-columns:1fr 380px;gap:44px;align-items:start;
+  }
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--paper);padding:34px 32px;color:var(--ink);
+    box-shadow:0 3px 8px rgba(0,0,0,.5), 0 18px 34px -14px rgba(0,0,0,.6);
+  }
+  .card h2{
+    font-family:var(--sans);font-weight:400;font-size:12px;letter-spacing:.35em;
+    color:var(--moss);margin-bottom:24px;
+  }
+  label{
+    display:block;font-family:var(--sans);font-weight:400;font-size:11.5px;
+    letter-spacing:.14em;color:var(--ink-soft);margin:20px 0 7px;
+  }
+  input[type=text],input[type=password]{
+    width:100%;border:none;border-bottom:1px solid rgba(28,26,22,.25);
+    background:transparent;padding:8px 2px;font-family:var(--serif);font-size:15px;color:var(--ink);
+    outline:none;transition:border-color .3s;
+  }
+  input:focus{border-color:var(--moss);}
+  .drop{
+    margin-top:8px;border:1.5px dashed rgba(239,234,221,.3);
+    background:var(--board-deep);
+    padding:44px 20px;text-align:center;cursor:pointer;
+    transition:border-color .3s, background .3s;
+  }
+  .drop:hover,.drop.over{border-color:var(--moss-lt);background:#2c2a22;}
+  .drop .pen{font-family:var(--pen);font-size:22px;color:rgba(239,234,221,.5);}
+  .drop .hint{font-family:var(--sans);font-weight:300;font-size:11px;letter-spacing:.1em;color:rgba(239,234,221,.45);margin-top:6px;}
+  .drop input{display:none;}
+
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+
+  .btn{
+    display:inline-block;width:100%;margin-top:30px;
+    font-family:var(--sans);font-weight:400;font-size:12.5px;letter-spacing:.3em;
+    background:var(--ink);color:var(--paper);border:none;cursor:pointer;
+    padding:16px 0;text-align:center;transition:background .3s;
+  }
+  .btn:hover{background:var(--moss);}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid rgba(28,26,22,.4);margin-top:12px;}
+  .btn.ghost:hover{border-color:var(--moss);color:var(--moss);background:transparent;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  details{margin-top:28px;border-top:1px solid rgba(28,26,22,.12);padding-top:18px;}
+  summary{
+    font-family:var(--sans);font-size:11.5px;letter-spacing:.2em;color:var(--ink-soft);
+    cursor:pointer;list-style:none;
+  }
+  summary::before{content:'⌄ ';color:var(--moss);}
+  .note{
+    font-family:var(--sans);font-weight:300;font-size:11.5px;line-height:1.9;
+    color:var(--ink-soft);margin-top:12px;
+  }
+  .note b{font-weight:500;color:var(--ink);}
+
+  .log{
+    margin-top:22px;font-family:var(--sans);font-weight:300;font-size:11.5px;
+    line-height:2;color:var(--ink-soft);white-space:pre-line;min-height:22px;
+  }
+  .log.ok{color:var(--moss);}
+  .log.err{color:#8a4b3a;}
+
+  /* 미리보기 폴라로이드 */
+  .preview-wrap{position:sticky;top:30px;}
+  .pol{
+    background:var(--paper);padding:10px 10px 40px;position:relative;
+    box-shadow:0 2px 5px rgba(28,26,22,.18), 0 12px 22px -12px rgba(28,26,22,.28);
+    transform:rotate(-1.4deg);transition:transform .4s;
+  }
+  .pol:hover{transform:rotate(0);}
+  .pol::before{
+    content:'';position:absolute;top:-9px;left:50%;width:74px;height:22px;
+    transform:translateX(-50%) rotate(-2deg);
+    background:rgba(233,224,196,.85);box-shadow:0 1px 2px rgba(28,26,22,.12);z-index:3;
+  }
+  .pol img{width:100%;height:auto;display:block;}
+  .pol .slot{
+    aspect-ratio:4/5;border:1.5px dashed rgba(239,234,221,.28);background:var(--board-deep);
+    display:flex;align-items:center;justify-content:center;text-align:center;
+  }
+  .pol .slot span{font-family:var(--pen);font-size:21px;color:rgba(239,234,221,.42);}
+  .pol .cap{
+    position:absolute;left:0;right:0;bottom:8px;text-align:center;
+    font-family:var(--pen);font-size:19px;color:var(--ink-soft);transform:rotate(-.5deg);
+  }
+  .pol .cap .no{color:var(--moss);margin-right:8px;font-size:15px;font-family:'Cormorant Garamond',serif;font-style:italic;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo">작은정원<span>GARDENER'S ROOM</span></div>
+  <a href="index.html">← 정원으로 돌아가기</a>
+</div>
+
+<div class="head">
+  <h1>오늘의 한 장</h1>
+  <div class="pen">가로든 세로든, 찍은 그대로 놓으면 됩니다.</div>
+</div>
+
+<div class="grid">
+  <!-- ===== 왼쪽: 업로드 폼 ===== -->
+  <div class="card">
+    <h2>UPLOAD</h2>
+
+    <div class="drop" id="drop">
+      <div class="pen">사진을 이곳에 놓아주세요</div>
+      <div class="hint">클릭하거나 드래그 — JPG / PNG / WEBP</div>
+      <input type="file" id="file" accept="image/*">
+    </div>
+
+    <div class="row">
+      <div>
+        <label>번호 (자동)</label>
+        <input type="text" id="no" placeholder="001">
+      </div>
+      <div>
+        <label>날짜</label>
+        <input type="text" id="date" placeholder="2026-07">
+      </div>
+    </div>
+
+    <label>캡션 — 프레임 아래 손글씨 (비워도 됩니다)</label>
+    <input type="text" id="cap" placeholder="예) 창가의 아침">
+
+    <label>글 — 사진을 클릭하면 옆에 앉는 글 (비워도 됩니다)</label>
+    <textarea id="text" rows="6" placeholder="사진 뒤에 적어두고 싶은 이야기를 남겨주세요." style="width:100%;border:1px solid rgba(28,26,22,.2);background:transparent;padding:12px;font-family:var(--serif);font-size:14px;line-height:2;color:var(--ink);outline:none;resize:vertical;"></textarea>
+
+    <details open>
+      <summary>깃허브로 바로 발행 (선택)</summary>
+      <div class="note">
+        내 깃허브 저장소에 사진과 목록(photos.json)을 <b>바로 커밋</b>합니다.<br>
+        토큰은 이 화면에서만 쓰이고 <b>어디에도 저장되지 않습니다.</b> (새로고침하면 사라짐)<br>
+        토큰 만들기: GitHub → Settings → Developer settings → Fine-grained tokens →
+        이 저장소만 선택 → Permissions에서 <b>Contents: Read and write</b>.
+      </div>
+      <div class="row">
+        <div>
+          <label>저장소 (owner/repo)</label>
           <input type="text" id="repo" placeholder="예) gardener-h/pretty-garden">
         </div>
         <div>
