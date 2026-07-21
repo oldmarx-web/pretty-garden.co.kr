@@ -254,3 +254,48 @@ footer{
   .wall{padding:16px 14px 40px;}
   footer{flex-direction:column;gap:16px;}
 }
+
+/* ---------- smartphone (가지런하게) ---------- */
+@media(max-width:520px){
+     header{padding:14px 18px;}
+     .logo{font-size:14px;}
+     .intro{padding:104px 22px 36px;}
+     .intro h1{font-size:24px;line-height:1.75;}
+     .wall{
+            columns:1;
+            max-width:440px;
+            padding:8px 20px 36px;
+     }
+     .pol{
+            margin:0 0 20px;
+            padding:9px 9px 36px;
+     }
+     .pol:nth-child(6n+1){transform:rotate(-.5deg);}
+     .pol:nth-child(6n+2){transform:rotate(.4deg);}
+     .pol:nth-child(6n+3){transform:rotate(-.3deg);}
+     .pol:nth-child(6n+4){transform:rotate(.5deg);}
+     .pol:nth-child(6n+5){transform:rotate(-.4deg);}
+     .pol:nth-child(6n+6){transform:rotate(.3deg);}
+     .pol .cap{font-size:17px;bottom:7px;}
+     .pol .cap .no{font-size:13px;}
+     .pol.empty .slot span{font-size:19px;}
+     .lb{padding:0;}
+     .lb .lb-card{
+            width:100%;max-width:100%;
+            max-height:100dvh;height:100dvh;
+            padding:12px;
+            flex-direction:column;overflow-y:auto;
+     }
+     .lb .lb-photo{flex:0 0 auto;background:none;}
+     .lb .lb-photo img{max-height:60dvh;}
+     .lb .lb-text{flex:0 0 auto;padding:22px 12px 34px;}
+     .lb .lb-text .t-cap{font-size:23px;}
+     .lb .lb-text .t-body{font-size:14px;line-height:2.1;}
+     .lb-close{
+            top:auto;bottom:18px;right:auto;left:50%;
+            transform:translateX(-50%);
+            background:rgba(24,22,17,.7);
+            padding:10px 22px;border-radius:20px;
+     }
+     footer{padding:50px 20px 40px;font-size:10px;}
+}
