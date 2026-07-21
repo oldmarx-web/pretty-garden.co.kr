@@ -164,6 +164,9 @@
     <label>캡션 — 프레임 아래 손글씨 (비워도 됩니다)</label>
     <input type="text" id="cap" placeholder="예) 창가의 아침">
 
+    <label>글 — 사진을 클릭하면 옆에 앉는 글 (비워도 됩니다)</label>
+    <textarea id="text" rows="6" placeholder="사진 뒤에 적어두고 싶은 이야기를 남겨주세요." style="width:100%;border:1px solid rgba(28,26,22,.2);background:transparent;padding:12px;font-family:var(--serif);font-size:14px;line-height:2;color:var(--ink);outline:none;resize:vertical;"></textarea>
+
     <details open>
       <summary>깃허브로 바로 발행 (선택)</summary>
       <div class="note">
@@ -258,6 +261,7 @@
       src: 'photos/no' + no + '.' + picked.ext,
       no,
       cap: $('cap').value.trim(),
+      text: $('text').value.trim(),
       date: $('date').value.trim(),
     };
   }

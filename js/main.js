@@ -19,7 +19,8 @@ function photoHTML(p, i) {
   const no = esc(p.no || String(i + 1).padStart(3, '0'));
   const cap = esc(p.cap || '');
   return `
-  <figure class="pol${tapeClass(i)}" data-cap="${cap}" data-src="${esc(p.src)}">
+  <figure class="pol${tapeClass(i)}" data-no="${no}" data-cap="${cap}" data-src="${esc(p.src)}"
+    data-text="${esc(p.text || '')}" data-date="${esc(p.date || '')}">
     <img src="${esc(p.src)}" alt="${cap || '작은정원 사진'}" loading="lazy">
     <figcaption class="cap"><span class="no">No.${no}</span>${cap}</figcaption>
   </figure>`;
@@ -60,14 +61,31 @@ function bindLightbox() {
   document.querySelectorAll('.pol:not(.empty)').forEach((p) => {
     p.addEventListener('click', () => {
       lbCard.innerHTML = '';
+      // 사진
+      const photoWrap = document.createElement('div');
+      photoWrap.className = 'lb-photo';
       const img = document.createElement('img');
       img.src = p.dataset.src;
       img.alt = p.dataset.cap || '';
-      lbCard.appendChild(img);
-      const c = document.createElement('div');
-      c.className = 'lb-cap';
-      c.textContent = p.dataset.cap || '';
-      lbCard.appendChild(c);
+      photoWrap.appendChild(img);
+      lbCard.appendChild(photoWrap);
+      // 글이 앉는 자리
+      const textWrap = document.createElement('div');
+      textWrap.className = 'lb-text';
+      const no = document.createElement('div');
+      no.className = 't-no';
+      no.textContent = p.dataset.no ? 'No.' + p.dataset.no : '';
+      const cap = document.createElement('div');
+      cap.className = 't-cap';
+      cap.textContent = p.dataset.cap || '';
+      const body = document.createElement('div');
+      body.className = 't-body';
+      body.textContent = p.dataset.text || '';
+      const date = document.createElement('div');
+      date.className = 't-date';
+      date.textContent = p.dataset.date || '';
+      textWrap.append(no, cap, body, date);
+      lbCard.appendChild(textWrap);
       lb.classList.add('open');
       document.body.style.overflow = 'hidden';
     });
