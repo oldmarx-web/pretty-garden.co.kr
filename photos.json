@@ -94,21 +94,21 @@
     {
       "src": "photos/no014.jpg",
       "no": "014",
-      "cap": "박수가 걷힌 자리",
-      "text": "",
-      "date": "2026-07"
-    },
-    {
-      "src": "photos/no015.jpg",
-      "no": "015",
-      "cap": "발소리의 에코",
+      "cap": "",
       "text": "",
       "date": "2026-07"
     },
     {
       "src": "photos/no016.jpg",
       "no": "016",
-      "cap": "개천의 템포",
+      "cap": "",
+      "text": "",
+      "date": "2026-07"
+    },
+    {
+      "src": "photos/no015.jpg",
+      "no": "1",
+      "cap": "",
       "text": "",
       "date": "2026-07"
     }

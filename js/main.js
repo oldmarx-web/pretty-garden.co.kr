@@ -15,22 +15,22 @@ function tapeClass(i) {
   return i % 3 === 0 ? ' tape' : (i % 3 === 1 ? ' tape-corner' : '');
 }
 
-function photoHTML(p, i) {
+function photoHTML(p, i, size) {
   const no = esc(p.no || String(i + 1).padStart(3, '0'));
-  const cap = esc(p.cap || '');
   return `
-  <figure class="pol${tapeClass(i)}" data-no="${no}" data-cap="${cap}" data-src="${esc(p.src)}"
+  <figure class="pol ${size}${tapeClass(i)}" data-no="${no}" data-src="${esc(p.src)}"
     data-text="${esc(p.text || '')}" data-date="${esc(p.date || '')}">
-    <img src="${esc(p.src)}" alt="${cap || 'phono·graph 사진'}" loading="lazy">
-    <figcaption class="cap"><span class="no">No.${no}</span>${cap}</figcaption>
+    <img src="${esc(p.src)}" alt="phono·graph No.${no}" loading="lazy">
+    <figcaption class="cap"><span class="no">No.${no}</span></figcaption>
   </figure>`;
 }
 
-function emptyHTML(i) {
+function emptyHTML(i, size) {
   const no = String(i + 1).padStart(3, '0');
+  const ratio = size === 'hero' ? '3/2' : '1/1';
   return `
-  <figure class="pol empty${tapeClass(i)}">
-    <div class="slot" style="aspect-ratio:${EMPTY_RATIOS[i % EMPTY_RATIOS.length]};">
+  <figure class="pol ${size} empty${tapeClass(i)}">
+    <div class="slot" style="aspect-ratio:${ratio};">
       <span>사진이 놓일 자리<br>No.${no}</span>
     </div>
     <figcaption class="cap"><span class="no">No.${no}</span>&nbsp;</figcaption>
@@ -38,18 +38,19 @@ function emptyHTML(i) {
 }
 
 function render(photos) {
+  // 최신 한 장은 크게, 지난 사진들은 아래 작게 (클릭하면 커집니다)
   let html = '';
   if (photos.length === 0) {
-    // 아직 사진이 없는 정원 — 빈자리 9곳
-    for (let i = 0; i < 9; i++) {
-      html += emptyHTML(i);
-    }
+    html = emptyHTML(0, 'hero');
   } else {
-    photos.forEach((p, i) => {
-      html += photoHTML(p, i);
+    html = photoHTML(photos[0], 0, 'hero');
+    html += '<div class="past">';
+    photos.slice(1).forEach((p, i) => {
+      html += photoHTML(p, i + 1, 'mini');
     });
     // 다음 사진을 기다리는 빈자리 하나
-    html += emptyHTML(photos.length);
+    html += emptyHTML(photos.length, 'mini');
+    html += '</div>';
   }
   WALL.innerHTML = html;
   bindLightbox();
@@ -66,7 +67,7 @@ function bindLightbox() {
       photoWrap.className = 'lb-photo';
       const img = document.createElement('img');
       img.src = p.dataset.src;
-      img.alt = p.dataset.cap || '';
+      img.alt = 'phono·graph';
       photoWrap.appendChild(img);
       lbCard.appendChild(photoWrap);
       // 글이 앉는 자리
@@ -77,7 +78,7 @@ function bindLightbox() {
       no.textContent = p.dataset.no ? 'No.' + p.dataset.no : '';
       const cap = document.createElement('div');
       cap.className = 't-cap';
-      cap.textContent = p.dataset.cap || '';
+      cap.textContent = 'phono·graph';  // 모든 사진의 제목
       const body = document.createElement('div');
       body.className = 't-body';
       body.textContent = p.dataset.text || '';
