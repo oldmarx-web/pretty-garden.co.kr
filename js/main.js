@@ -1,4 +1,4 @@
-/* 작은정원 — 폴라로이드 정원
+/* phono·graph — 폴라로이드 월
    photos.json을 읽어 폴라로이드 월을 그립니다.
    사진이 없으면 '빈자리' 프레임을 보여줍니다. */
 
@@ -21,7 +21,7 @@ function photoHTML(p, i) {
   return `
   <figure class="pol${tapeClass(i)}" data-no="${no}" data-cap="${cap}" data-src="${esc(p.src)}"
     data-text="${esc(p.text || '')}" data-date="${esc(p.date || '')}">
-    <img src="${esc(p.src)}" alt="${cap || '작은정원 사진'}" loading="lazy">
+    <img src="${esc(p.src)}" alt="${cap || 'phono·graph 사진'}" loading="lazy">
     <figcaption class="cap"><span class="no">No.${no}</span>${cap}</figcaption>
   </figure>`;
 }
