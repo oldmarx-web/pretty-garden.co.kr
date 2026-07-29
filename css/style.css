@@ -317,7 +317,8 @@ body{font-weight:300;}
   display:flex;flex-wrap:wrap;gap:18px;
   justify-content:center;align-items:flex-start;
 }
-.pol.mini{width:132px;margin:0;padding:6px 6px 24px;}
+.pol.mini{width:132px;margin:0;padding:6px 6px 24px;transform:none;}
+.pol.mini:hover{transform:translateY(-4px) scale(1.03);}
 .pol.mini .cap{font-size:9px;bottom:6px;letter-spacing:.12em;}
 .pol.mini .cap .no{font-size:9px;margin-right:0;}
 .pol.mini.tape::before{width:40px;height:12px;top:-5px;}

@@ -125,6 +125,23 @@
     font-family:var(--pen);font-size:19px;color:var(--ink-soft);transform:rotate(-.5deg);
   }
   .pol .cap .no{color:var(--moss);margin-right:8px;font-size:15px;font-family:'Cormorant Garamond',serif;font-style:italic;}
+
+  /* ===== EDIT — 걸린 사진 목록 ===== */
+  .list{margin-top:4px;max-height:400px;overflow-y:auto;}
+  .item{
+    display:flex;align-items:center;gap:14px;padding:10px 6px;
+    border-bottom:1px solid rgba(28,26,22,.1);cursor:pointer;transition:background .2s;
+  }
+  .item:hover{background:rgba(154,162,132,.12);}
+  .item.sel{background:rgba(154,162,132,.22);}
+  .item img{width:52px;height:52px;object-fit:cover;display:block;flex:0 0 52px;}
+  .item .in{min-width:0;}
+  .item .in .n{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:var(--moss);}
+  .item .in .c{
+    font-family:var(--sans);font-weight:300;font-size:12px;color:var(--ink-soft);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #editForm{display:none;margin-top:20px;border-top:1px dashed rgba(28,26,22,.25);padding-top:8px;}
 </style>
 </head>
 <body>
@@ -194,6 +211,39 @@
     <div class="log" id="log"></div>
   </div>
 
+  <!-- ===== 왼쪽 아래: 걸린 사진 고치기 ===== -->
+  <div class="card">
+    <h2>EDIT — 걸린 사진 고치기</h2>
+    <div class="note" style="margin-top:0;">
+      사진을 고르면 <b>제목과 글</b>을 고칠 수 있습니다.
+      발행은 위 카드의 저장소·토큰을 그대로 씁니다.
+    </div>
+    <div class="list" id="editList"></div>
+
+    <div id="editForm">
+      <div class="row">
+        <div>
+          <label>번호</label>
+          <input type="text" id="eNo">
+        </div>
+        <div>
+          <label>날짜</label>
+          <input type="text" id="eDate">
+        </div>
+      </div>
+
+      <label>제목 (캡션)</label>
+      <input type="text" id="eCap" placeholder="비워도 됩니다">
+
+      <label>글</label>
+      <textarea id="eText" rows="7" placeholder="사진 뒤에 적어두고 싶은 이야기" style="width:100%;border:1px solid rgba(28,26,22,.2);background:transparent;padding:12px;font-family:var(--serif);font-size:14px;line-height:2;color:var(--ink);outline:none;resize:vertical;"></textarea>
+
+      <button class="btn" id="editPublish">고쳐 심기 — 깃허브로 발행</button>
+      <button class="btn ghost" id="editDownload">토큰 없이 — photos.json 내려받기</button>
+      <div class="log" id="editLog"></div>
+    </div>
+  </div>
+
   <!-- ===== 오른쪽: 미리보기 ===== -->
   <div class="preview-wrap">
     <div class="card" style="padding:26px;">
@@ -231,6 +281,7 @@
       const next = String(currentJson.photos.length + 1).padStart(3, '0');
       $('no').value = next;
       $('prevNo').textContent = 'No.' + next;
+      renderEditList();
     });
 
   const today = new Date();
@@ -329,12 +380,126 @@
         prevImg.outerHTML = '<div class="slot" id="prevSlot"><span>사진이 놓일 자리</span></div>';
       }
       currentJson = remote;
+      renderEditList();
       const nextNo = String(remote.photos.length + 1).padStart(3, '0');
       $('no').value = nextNo;
       $('prevNo').textContent = 'No.' + nextNo;
     } catch (err) {
       say('실패: ' + err.message + '\n토큰 권한(Contents: Read and write)과 저장소 이름을 확인해주세요.', 'err');
     }
+  });
+
+  // ==================================================
+  //  EDIT — 걸린 사진의 제목/글 고치기
+  // ==================================================
+  let editIdx = -1;   // currentJson.photos 배열 기준 인덱스
+
+  const esc2 = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+
+  function renderEditList() {
+    const list = $('editList');
+    if (!list) return;
+    const photos = currentJson.photos || [];
+    if (!photos.length) {
+      list.innerHTML = '<div class="note">아직 걸린 사진이 없습니다.</div>';
+      return;
+    }
+    // 최신(배열의 끝)이 위로
+    list.innerHTML = photos.map((p, i) => ({ p, i })).reverse().map(({ p, i }) => `
+      <div class="item${i === editIdx ? ' sel' : ''}" data-idx="${i}">
+        <img src="${esc2(p.src)}" alt="" loading="lazy">
+        <div class="in">
+          <div class="n">No.${esc2(p.no)}</div>
+          <div class="c">${esc2(p.cap || (p.text ? p.text.split('\n')[0] : '')) || '&nbsp;'}</div>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('.item').forEach((el) => {
+      el.addEventListener('click', () => selectEdit(Number(el.dataset.idx)));
+    });
+  }
+
+  function selectEdit(i) {
+    const p = (currentJson.photos || [])[i];
+    if (!p) return;
+    editIdx = i;
+    $('eNo').value = p.no || '';
+    $('eDate').value = p.date || '';
+    $('eCap').value = p.cap || '';
+    $('eText').value = p.text || '';
+    $('editForm').style.display = 'block';
+    sayEdit('No.' + p.no + ' — 고칠 내용을 적고 심어주세요.');
+    renderEditList();
+  }
+
+  function sayEdit(msg, cls) {
+    const el = $('editLog');
+    el.textContent = msg; el.className = 'log ' + (cls || '');
+  }
+
+  function editedEntry() {
+    const p = currentJson.photos[editIdx];
+    return Object.assign({}, p, {
+      no: $('eNo').value.trim() || p.no,
+      date: $('eDate').value.trim(),
+      cap: $('eCap').value.trim(),
+      text: $('eText').value.trim(),
+    });
+  }
+
+  // ---- 고쳐 심기: 깃허브 API로 photos.json만 갱신 ----
+  $('editPublish').addEventListener('click', async () => {
+    if (editIdx < 0) return;
+    const repo = $('repo').value.trim(), branch = $('branch').value.trim() || 'main', token = $('token').value.trim();
+    if (!repo.includes('/') || !token) { sayEdit('위 카드의 저장소(owner/repo)와 토큰을 확인해주세요.', 'err'); return; }
+    const target = currentJson.photos[editIdx];
+    const entry = editedEntry();
+    const api = 'https://api.github.com/repos/' + repo + '/contents/';
+    const headers = {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    };
+    try {
+      sayEdit('고치는 중…');
+      const getRes = await fetch(api + 'photos.json?ref=' + branch, { headers });
+      if (!getRes.ok) throw new Error('photos.json을 읽지 못했습니다 (' + getRes.status + ')');
+      const j = await getRes.json();
+      const remote = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, '')))));
+      remote.photos = remote.photos || [];
+      // src로 같은 사진을 찾고, 없으면 같은 자리로
+      let ri = remote.photos.findIndex((p) => p.src === target.src);
+      if (ri < 0) ri = editIdx;
+      if (!remote.photos[ri]) throw new Error('원격 목록에서 사진을 찾지 못했습니다.');
+      remote.photos[ri] = Object.assign({}, remote.photos[ri], {
+        no: entry.no, date: entry.date, cap: entry.cap, text: entry.text,
+      });
+      const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(remote, null, 2))));
+      const putRes = await fetch(api + 'photos.json', {
+        method: 'PUT', headers,
+        body: JSON.stringify({ message: '✏ photos.json — No.' + entry.no + ' 고침', content: newContent, sha: j.sha, branch }),
+      });
+      if (!putRes.ok) throw new Error('photos.json 갱신 실패 (' + putRes.status + ')');
+      try { localStorage.setItem('pg_token', token); } catch (e) {}
+      currentJson = remote;
+      renderEditList();
+      sayEdit('고쳤습니다. 반영까지 1–2분 걸립니다.', 'ok');
+    } catch (err) {
+      sayEdit('실패: ' + err.message, 'err');
+    }
+  });
+
+  // ---- 토큰 없이: 고친 photos.json 내려받기 ----
+  $('editDownload').addEventListener('click', () => {
+    if (editIdx < 0) return;
+    const updated = { photos: (currentJson.photos || []).map((p, i) => (i === editIdx ? editedEntry() : p)) };
+    const blob = new Blob([JSON.stringify(updated, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'photos.json';
+    a.click();
+    sayEdit('photos.json을 내려받았습니다. 저장소 루트에 덮어쓰면 반영됩니다.', 'ok');
   });
 
   // ---------- 방식 B: 파일로 내려받아 직접 커밋 ----------
